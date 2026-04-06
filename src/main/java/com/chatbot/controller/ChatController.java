@@ -3,9 +3,8 @@ package com.chatbot.controller;
 import com.chatbot.dto.ChatRequest;
 import com.chatbot.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.Map;
 
@@ -21,16 +20,24 @@ public class ChatController {
         this.objectMapper = objectMapper;
     }
 
-    @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> stream(@RequestBody ChatRequest request) {
-        return chatService.streamChat(request.getSessionId(), request.getMessage())
-                .map(token -> {
-                    try {
-                        // 줄바꿈 문자가 SSE 구분자로 처리되지 않도록 JSON으로 감쌈
-                        return objectMapper.writeValueAsString(Map.of("t", token));
-                    } catch (Exception e) {
-                        return "{\"t\":\"\"}";
-                    }
-                });
+    @PostMapping("/stream")
+    public SseEmitter stream(@RequestBody ChatRequest request) {
+        SseEmitter emitter = new SseEmitter(300_000L);
+
+        chatService.streamChat(request.getSessionId(), request.getMessage())
+                .subscribe(
+                        token -> {
+                            try {
+                                String json = objectMapper.writeValueAsString(Map.of("t", token));
+                                emitter.send(json);  // 토큰마다 즉시 flush
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        },
+                        emitter::completeWithError,
+                        emitter::complete
+                );
+
+        return emitter;
     }
 }

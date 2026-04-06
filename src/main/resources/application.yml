@@ -1,8 +1,25 @@
-anthropic:
-  api-key: ${ANTHROPIC_API_KEY}
-  model: claude-opus-4-5
-
 spring:
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      chat:
+        options:
+          model: claude-opus-4-5
+          max-tokens: 4096
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        enabled: false          # 채팅은 Anthropic만 사용
+      embedding:
+        options:
+          model: text-embedding-3-small
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        index-type: hnsw
+        distance-type: cosine_distance
+        dimensions: 1536        # text-embedding-3-small 차원
+
   datasource:
     url: jdbc:postgresql://localhost:5432/chatbot
     username: ${DB_USERNAME:chatbot}
