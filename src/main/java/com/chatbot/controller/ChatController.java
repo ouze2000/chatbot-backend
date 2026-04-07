@@ -24,19 +24,29 @@ public class ChatController {
     public SseEmitter stream(@RequestBody ChatRequest request) {
         SseEmitter emitter = new SseEmitter(300_000L);
 
-        chatService.streamChat(request.getSessionId(), request.getMessage())
-                .subscribe(
-                        token -> {
-                            try {
-                                String json = objectMapper.writeValueAsString(Map.of("t", token));
-                                emitter.send(json);  // 토큰마다 즉시 flush
-                            } catch (Exception e) {
-                                emitter.completeWithError(e);
-                            }
-                        },
-                        emitter::completeWithError,
-                        emitter::complete
-                );
+        ChatService.ChatResult result = chatService.streamChat(request.getSessionId(), request.getMessage());
+
+        try {
+            // 소스 목록을 첫 번째 이벤트로 전송
+            String sourcesJson = objectMapper.writeValueAsString(Map.of("sources", result.sources()));
+            emitter.send(sourcesJson);
+        } catch (Exception e) {
+            emitter.completeWithError(e);
+            return emitter;
+        }
+
+        result.stream().subscribe(
+                token -> {
+                    try {
+                        String json = objectMapper.writeValueAsString(Map.of("t", token));
+                        emitter.send(json);
+                    } catch (Exception e) {
+                        emitter.completeWithError(e);
+                    }
+                },
+                emitter::completeWithError,
+                emitter::complete
+        );
 
         return emitter;
     }

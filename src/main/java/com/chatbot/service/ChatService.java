@@ -7,62 +7,115 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * 채팅 서비스
+ * RAG 기반 채팅 서비스
  * Spring AI를 사용하여 Anthropic Claude API와 통신하고,
- * 대화 내역을 PostgreSQL DB에 저장합니다.
+ * 벡터 스토어에서 관련 문서를 검색하여 컨텍스트로 제공합니다.
+ * 대화 내역은 PostgreSQL DB에 저장됩니다.
  */
 @Service
 public class ChatService {
 
-    // AI 어시스턴트의 기본 시스템 프롬프트
-    private static final String SYSTEM_PROMPT = "You are a helpful assistant. Answer in the same language as the user's message.";
+    // RAG 시스템 프롬프트: 컨텍스트를 우선 사용하도록 지시
+    private static final String SYSTEM_PROMPT = """
+            You are a helpful assistant. Answer in the same language as the user's message.
+
+            If the following context is provided, use it as the primary source to answer the question.
+            If the context is not relevant to the question, answer based on your general knowledge.
+
+            Context:
+            %s
+            """;
 
     private final ChatClient chatClient;
     private final ConversationRepository conversationRepository;
+    private final VectorStore vectorStore;
 
     /**
-     * 생성자: Spring AI ChatClient 초기화 및 Repository 주입
+     * 채팅 결과 레코드
+     * @param sources 참조한 소스 파일명 목록
+     * @param stream 스트리밍 응답 Flux
+     */
+    public record ChatResult(List<String> sources, Flux<String> stream) {}
+
+    /**
+     * 생성자: ChatClient, Repository, VectorStore 주입
      * @param anthropicChatModel Anthropic Claude 모델
      * @param conversationRepository 대화 내역 저장소
+     * @param vectorStore 벡터 임베딩 저장소 (RAG용)
      */
-    public ChatService(AnthropicChatModel anthropicChatModel, ConversationRepository conversationRepository) {
+    public ChatService(AnthropicChatModel anthropicChatModel,
+                       ConversationRepository conversationRepository,
+                       VectorStore vectorStore) {
         this.chatClient = ChatClient.builder(anthropicChatModel).build();
         this.conversationRepository = conversationRepository;
+        this.vectorStore = vectorStore;
     }
 
     /**
-     * SSE 스트리밍 채팅 처리
+     * RAG 기반 SSE 스트리밍 채팅 처리
      * 
      * @param sessionId 세션 ID (대화 구분용)
      * @param userMessage 사용자 메시지
-     * @return Flux<String> 스트리밍 응답 (각 토큰이 실시간으로 전송됨)
+     * @return ChatResult 소스 파일 목록과 스트리밍 응답
+     * 
      * 처리 흐름:
-     * 1. DB에서 세션의 기존 대화 이력 조회 (블로킹)
-     * 2. Spring AI Message 타입으로 변환 (UserMessage/AssistantMessage)
-     * 3. 현재 사용자 메시지를 히스토리에 추가 (메모리상에만, DB 저장 안 함)
-     * 4. ChatClient로 스트리밍 요청
-     * 5. 각 응답 청크를 클라이언트로 실시간 전송하면서 fullResponse에 누적
-     * 6. 스트리밍 완료 시 사용자 메시지 + 어시스턴트 응답을 DB에 저장 (비동기)
-     * 장점:
-     * - 스트리밍 시작 전 블로킹 DB 저장 없음 → 응답 지연 최소화
-     * - 스트리밍 완료 후 별도 스레드에서 일괄 저장 → 메인 Flux 블로킹 없음
+     * 1. 벡터 스토어에서 사용자 질문과 유사한 문서 청크 검색 (상위 5개)
+     * 2. 검색된 청크의 소스 파일명 추출 (중복 제거)
+     * 3. 청크 텍스트를 컨텍스트로 조합
+     * 4. 시스템 프롬프트에 컨텍스트 삽입
+     * 5. DB에서 대화 이력 조회 및 현재 메시지 추가
+     * 6. ChatClient로 스트리밍 요청
+     * 7. 스트리밍 완료 시 사용자 메시지 + 어시스턴트 응답을 DB에 저장 (비동기)
+     * 8. 소스 목록과 스트림을 ChatResult로 반환
+     * 
+     * RAG 특징:
+     * - 벡터 유사도 검색으로 관련 문서 자동 탐색
+     * - 검색된 컨텍스트를 AI에게 제공하여 정확도 향상
+     * - 소스 파일명을 반환하여 출처 추적 가능
      */
-    public Flux<String> streamChat(String sessionId, String userMessage) {
-        // DB에서 기존 대화 이력 조회 (블로킹이지만 스트리밍 시작 전 필수)
+    public ChatResult streamChat(String sessionId, String userMessage) {
+        // 1. 벡터 스토어에서 유사 청크 검색 (코사인 유사도 기반, 상위 5개)
+        List<Document> docs = vectorStore.similaritySearch(
+                SearchRequest.builder().query(userMessage).topK(5).build());
+
+        // 2. 소스 파일명 추출 (메타데이터에서 file_name 추출, 중복 제거)
+        List<String> sources = docs.stream()
+                .map(doc -> {
+                    Object name = doc.getMetadata().get("file_name");
+                    return name != null ? name.toString() : null;
+                })
+                .filter(name -> name != null)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // 3. 검색된 청크들의 텍스트를 컨텍스트로 조합
+        String context = docs.stream()
+                .map(Document::getText)
+                .collect(Collectors.joining("\n\n"));
+
+        // 4. 시스템 프롬프트에 컨텍스트 삽입 (컨텍스트가 없으면 "없음")
+        String systemPrompt = String.format(SYSTEM_PROMPT, context.isBlank() ? "없음" : context);
+
+        // 5. DB에서 기존 대화 이력 조회 및 Spring AI Message 타입으로 변환
         List<Message> history = conversationRepository
                 .findBySessionIdOrderByCreatedAtAsc(sessionId)
                 .stream()
                 .map(c -> (Message) (c.getRole().equals("user")
                         ? new UserMessage(c.getContent())
                         : new AssistantMessage(c.getContent())))
-                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+                .collect(Collectors.toCollection(ArrayList::new));
 
         // 현재 사용자 메시지를 히스토리에 추가 (메모리상에만)
         history.add(new UserMessage(userMessage));
@@ -70,19 +123,22 @@ public class ChatService {
         // 전체 응답을 누적할 StringBuilder
         StringBuilder fullResponse = new StringBuilder();
 
-        // Spring AI ChatClient로 스트리밍 요청
-        return chatClient.prompt()
-                .system(SYSTEM_PROMPT)  // 시스템 프롬프트 설정
-                .messages(history)       // 대화 이력 전달
-                .stream()                // 스트리밍 모드
-                .content()               // 텍스트 콘텐츠만 추출
+        // 6. Spring AI ChatClient로 스트리밍 요청
+        Flux<String> stream = chatClient.prompt()
+                .system(systemPrompt)    // RAG 컨텍스트가 포함된 시스템 프롬프트
+                .messages(history)        // 대화 이력 전달
+                .stream()                 // 스트리밍 모드
+                .content()                // 텍스트 콘텐츠만 추출
                 .doOnNext(fullResponse::append)  // 각 청크를 fullResponse에 누적
-                .doOnComplete(() ->      // 스트리밍 완료 시
+                .doOnComplete(() ->       // 스트리밍 완료 시
                         Schedulers.boundedElastic().schedule(() -> {  // 별도 스레드에서 비동기 실행
-                            // 사용자 메시지와 어시스턴트 응답을 DB에 일괄 저장
+                            // 7. 사용자 메시지와 어시스턴트 응답을 DB에 일괄 저장
                             conversationRepository.save(new Conversation(sessionId, "user", userMessage));
                             conversationRepository.save(new Conversation(sessionId, "assistant", fullResponse.toString()));
                         })
                 );
+
+        // 8. 소스 파일 목록과 스트림을 함께 반환
+        return new ChatResult(sources, stream);
     }
 }
