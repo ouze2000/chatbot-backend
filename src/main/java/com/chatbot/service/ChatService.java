@@ -94,8 +94,12 @@ public class ChatService {
      */
     public ChatResult streamChat(String sessionId, String userMessage) {
         // 1. 벡터 스토어에서 유사 청크 검색 (코사인 유사도 기반, 상위 5개)
+        // 수치 조정 기준:
+        // - 0.5 (현재) — 기본값, 적당한 관련성
+        // - 0.7 — 엄격, 매우 관련성 높은 문서만
+        // - 0.3 — 느슨, 조금이라도 관련 있으면 포함
         List<Document> docs = vectorStore.similaritySearch(
-                SearchRequest.builder().query(userMessage).topK(5).build());
+                SearchRequest.builder().query(userMessage).topK(5).similarityThreshold(0.5).build());
 
         // 2. 소스 파일명 + document_id 추출 (중복 제거)
         List<Source> sources = docs.stream()
