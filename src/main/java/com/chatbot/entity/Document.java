@@ -20,6 +20,9 @@ public class Document {
     @Column(name = "chunk_count")
     private Integer chunkCount;
 
+    @Column(name = "file_path")
+    private String filePath;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -41,5 +44,7 @@ public class Document {
     public void setStatus(String status) { this.status = status; }
     public Integer getChunkCount() { return chunkCount; }
     public void setChunkCount(Integer chunkCount) { this.chunkCount = chunkCount; }
+    public String getFilePath() { return filePath; }
+    public void setFilePath(String filePath) { this.filePath = filePath; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

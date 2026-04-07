@@ -43,11 +43,18 @@ public class ChatService {
     private final VectorStore vectorStore;
 
     /**
+     * 소스 파일 정보 레코드
+     * @param id 문서 ID
+     * @param fileName 파일명
+     */
+    public record Source(String id, String fileName) {}
+    
+    /**
      * 채팅 결과 레코드
-     * @param sources 참조한 소스 파일명 목록
+     * @param sources 참조한 소스 파일 목록 (문서 ID + 파일명)
      * @param stream 스트리밍 응답 Flux
      */
-    public record ChatResult(List<String> sources, Flux<String> stream) {}
+    public record ChatResult(List<Source> sources, Flux<String> stream) {}
 
     /**
      * 생성자: ChatClient, Repository, VectorStore 주입
@@ -90,13 +97,14 @@ public class ChatService {
         List<Document> docs = vectorStore.similaritySearch(
                 SearchRequest.builder().query(userMessage).topK(5).build());
 
-        // 2. 소스 파일명 추출 (메타데이터에서 file_name 추출, 중복 제거)
-        List<String> sources = docs.stream()
+        // 2. 소스 파일명 + document_id 추출 (중복 제거)
+        List<Source> sources = docs.stream()
                 .map(doc -> {
+                    Object id = doc.getMetadata().get("document_id");
                     Object name = doc.getMetadata().get("file_name");
-                    return name != null ? name.toString() : null;
+                    return (id != null && name != null) ? new Source(id.toString(), name.toString()) : null;
                 })
-                .filter(name -> name != null)
+                .filter(s -> s != null)
                 .distinct()
                 .collect(Collectors.toList());
 
