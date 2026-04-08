@@ -1,13 +1,56 @@
 # Chatbot Backend
 
-Spring Boot + Spring AI 기반 RAG 챗봇 백엔드
+Spring Boot + Spring AI 기반 챗봇 백엔드 샘플 프로젝트
+
+Spring AI의 주요 기능인 **RAG**, **Tool Calling**, **Structured Output**, **Multimodal**을 실제로 구현하여 보여주는 예제입니다.
+
+---
+
+## 구현된 Spring AI 기능
+
+| 기능 | 설명 | 관련 클래스 |
+|---|---|---|
+| **Chat + Streaming** | SSE 기반 실시간 스트리밍 채팅, 대화 이력 관리 | `ChatService` |
+| **RAG** | 문서 임베딩 → pgvector 저장 → 유사도 검색 → 컨텍스트 주입 | `DocumentService`, `ChatService` |
+| **Tool Calling** | AI가 필요 시 날씨/날짜/계산 도구를 자동으로 호출 | `WeatherTool`, `DateTimeTool`, `CalculatorTool` |
+| **Structured Output** | LLM 응답을 Java 객체로 자동 변환 (`entity()`) | `AnalysisService` |
+| **Multimodal** | 이미지 + 텍스트를 함께 Claude Vision에 전달 | `ImageAnalysisService` |
+
+---
+
+## 아키텍처
+
+```
+Frontend (React)
+     │
+     ▼
+ChatController ──────────────────────────────────────────┐
+     │                                                   │
+     ├── VectorStore (pgvector)  ← DocumentService       │
+     │     유사 청크 검색 (RAG)       임베딩 저장          │
+     │                                                   │
+     ├── WeatherTool / DateTimeTool / CalculatorTool      │
+     │     Tool Calling (필요 시 자동 호출)               │
+     │                                                   │
+     └── AnthropicChatModel (Claude)  ──────────────────►┘
+           SSE 스트리밍 응답
+
+AnalysisController
+     ├── AnalysisService      → Structured Output (텍스트 분석)
+     └── ImageAnalysisService → Multimodal + Structured Output (이미지 분석)
+```
+
+---
 
 ## 기술 스택
 
 - Java 17
 - Spring Boot 3.3.5
-- Spring AI 1.0.0 (Anthropic Claude, OpenAI Embedding)
-- PostgreSQL 16 + pgvector (벡터 검색)
+- Spring AI 1.0.5
+  - Anthropic Claude (`claude-sonnet-4-6`) — 채팅, Tool Calling, Vision
+  - OpenAI (`text-embedding-3-small`) — 텍스트 임베딩
+  - pgvector — 벡터 스토어
+- PostgreSQL 16 + pgvector
 - JPA / Hibernate
 
 ---
@@ -24,8 +67,9 @@ Spring Boot + Spring AI 기반 RAG 챗봇 백엔드
 
 | 키 | 용도 | 발급처 |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Claude 챗 모델 | https://console.anthropic.com |
+| `ANTHROPIC_API_KEY` | Claude 채팅 / Vision 모델 | https://console.anthropic.com |
 | `OPENAI_API_KEY` | 텍스트 임베딩 (text-embedding-3-small) | https://platform.openai.com |
+| `app.weather-api-key` | 날씨 Tool (OpenWeatherMap) | https://openweathermap.org/api |
 
 ---
 
@@ -94,6 +138,9 @@ spring:
       api-key: sk-ant-api03-...   # Anthropic API 키
     openai:
       api-key: sk-proj-...        # OpenAI API 키
+
+app:
+  weather-api-key: ...            # OpenWeatherMap API 키
 ```
 
 > `application-local.yml`은 `.gitignore`에 포함되어 있어 Git에 커밋되지 않습니다.
@@ -113,19 +160,30 @@ spring:
 
 ## 5. 주요 API
 
+### 채팅
 | Method | URL | 설명 |
 |---|---|---|
-| POST | `/api/chat/stream` | SSE 스트리밍 채팅 |
+| POST | `/api/chat/stream` | SSE 스트리밍 채팅 (RAG + Tool Calling) |
+
+### 문서 관리
+| Method | URL | 설명 |
+|---|---|---|
 | GET | `/api/documents` | 문서 목록 조회 |
-| POST | `/api/documents/upload` | 문서 업로드 (PDF, TXT, MD) |
-| DELETE | `/api/documents/{id}` | 문서 삭제 |
+| POST | `/api/documents/upload` | 문서 업로드 및 임베딩 (PDF, TXT, MD) |
+| DELETE | `/api/documents/{id}` | 문서 삭제 (파일 + 벡터 + DB) |
 | GET | `/api/documents/{id}/download` | 문서 다운로드 |
+
+### 분석
+| Method | URL | 설명 |
+|---|---|---|
+| POST | `/api/analysis` | 텍스트 분석 (Structured Output) |
+| POST | `/api/analysis/image` | 이미지 분석 (Multimodal + Structured Output) |
 
 ---
 
 ## 6. 업로드 파일 저장 위치
 
-업로드된 파일은 기본적으로 `./uploads/` 디렉토리에 저장됩니다.  
+업로드된 파일은 기본적으로 `./uploads/` 디렉토리에 저장됩니다.
 경로를 변경하려면 `application.yml` 또는 `application-local.yml`에 아래 설정을 추가합니다.
 
 ```yaml
