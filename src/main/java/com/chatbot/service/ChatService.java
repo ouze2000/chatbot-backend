@@ -2,6 +2,8 @@ package com.chatbot.service;
 
 import com.chatbot.entity.Conversation;
 import com.chatbot.repository.ConversationRepository;
+import com.chatbot.tool.CalculatorTool;
+import com.chatbot.tool.DateTimeTool;
 import com.chatbot.tool.WeatherTool;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
@@ -23,7 +25,7 @@ import java.util.stream.Collectors;
  * RAG 기반 채팅 서비스
  * Spring AI를 사용하여 Anthropic Claude API와 통신하고,
  * 벡터 스토어에서 관련 문서를 검색하여 컨텍스트로 제공합니다.
- * WeatherTool을 통해 AI가 필요 시 날씨 정보를 조회할 수 있습니다.
+ * WeatherTool, DateTimeTool, CalculatorTool을 통해 AI가 필요 시 외부 정보를 조회하거나 계산을 수행할 수 있습니다.
  * 대화 내역은 PostgreSQL DB에 저장됩니다.
  */
 @Service
@@ -44,6 +46,8 @@ public class ChatService {
     private final ConversationRepository conversationRepository;
     private final VectorStore vectorStore;
     private final WeatherTool weatherTool;
+    private final DateTimeTool dateTimeTool;
+    private final CalculatorTool calculatorTool;
 
     /**
      * 소스 파일 정보 레코드
@@ -60,20 +64,26 @@ public class ChatService {
     public record ChatResult(List<Source> sources, Flux<String> stream) {}
 
     /**
-     * 생성자: ChatClient, Repository, VectorStore, WeatherTool 주입
+     * 생성자: ChatClient, Repository, VectorStore, Tools 주입
      * @param anthropicChatModel Anthropic Claude 모델
      * @param conversationRepository 대화 내역 저장소
      * @param vectorStore 벡터 임베딩 저장소 (RAG용)
      * @param weatherTool 날씨 조회 도구 (AI가 필요 시 자동 호출)
+     * @param dateTimeTool 날짜/시간 조회 도구 (AI가 필요 시 자동 호출)
+     * @param calculatorTool 계산기 도구 (AI가 필요 시 자동 호출)
      */
     public ChatService(AnthropicChatModel anthropicChatModel,
                        ConversationRepository conversationRepository,
                        VectorStore vectorStore,
-                       WeatherTool weatherTool) {
+                       WeatherTool weatherTool,
+                       DateTimeTool dateTimeTool,
+                       CalculatorTool calculatorTool) {
         this.chatClient = ChatClient.builder(anthropicChatModel).build();
         this.conversationRepository = conversationRepository;
         this.vectorStore = vectorStore;
         this.weatherTool = weatherTool;
+        this.dateTimeTool = dateTimeTool;
+        this.calculatorTool = calculatorTool;
     }
 
     /**
@@ -150,7 +160,7 @@ public class ChatService {
         Flux<String> stream = chatClient.prompt()
                 .system(systemPrompt)    // RAG 컨텍스트가 포함된 시스템 프롬프트
                 .messages(history)        // 대화 이력 전달
-                .tools(weatherTool)       // 날씨 조회 도구 등록 (AI가 필요 시 자동 호출)
+                .tools(weatherTool, dateTimeTool, calculatorTool)  // 도구 등록 (AI가 필요 시 자동 호출)
                 .stream()                 // 스트리밍 모드
                 .content()                // 텍스트 콘텐츠만 추출
                 .doOnNext(fullResponse::append)  // 각 청크를 fullResponse에 누적
