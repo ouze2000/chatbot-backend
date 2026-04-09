@@ -45,3 +45,5 @@ app:
     secret: ${JWT_SECRET:chatbot-jwt-secret-key-must-be-at-least-256-bits-long!!}
     access-token-expiry: 900000       # 15분 (ms)
     refresh-token-expiry: 604800000   # 7일 (ms)
+  newsdata:
+    api-key: ${NEWSDATA_API_KEY:}
