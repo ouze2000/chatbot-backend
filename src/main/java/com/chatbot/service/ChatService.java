@@ -5,6 +5,7 @@ import com.chatbot.repository.ConversationRepository;
 import com.chatbot.tool.CalculatorTool;
 import com.chatbot.tool.DateTimeTool;
 import com.chatbot.tool.WeatherTool;
+import com.chatbot.tool.WebCrawlTool;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -48,6 +49,7 @@ public class ChatService {
     private final WeatherTool weatherTool;
     private final DateTimeTool dateTimeTool;
     private final CalculatorTool calculatorTool;
+    private final WebCrawlTool webCrawlTool;
 
     /**
      * 소스 파일 정보 레코드
@@ -77,13 +79,15 @@ public class ChatService {
                        VectorStore vectorStore,
                        WeatherTool weatherTool,
                        DateTimeTool dateTimeTool,
-                       CalculatorTool calculatorTool) {
+                       CalculatorTool calculatorTool,
+                       WebCrawlTool webCrawlTool) {
         this.chatClient = ChatClient.builder(anthropicChatModel).build();
         this.conversationRepository = conversationRepository;
         this.vectorStore = vectorStore;
         this.weatherTool = weatherTool;
         this.dateTimeTool = dateTimeTool;
         this.calculatorTool = calculatorTool;
+        this.webCrawlTool = webCrawlTool;
     }
 
     /**
@@ -160,7 +164,7 @@ public class ChatService {
         Flux<String> stream = chatClient.prompt()
                 .system(systemPrompt)    // RAG 컨텍스트가 포함된 시스템 프롬프트
                 .messages(history)        // 대화 이력 전달
-                .tools(weatherTool, dateTimeTool, calculatorTool)  // 도구 등록 (AI가 필요 시 자동 호출)
+                .tools(weatherTool, dateTimeTool, calculatorTool, webCrawlTool)  // 도구 등록 (AI가 필요 시 자동 호출)
                 .stream()                 // 스트리밍 모드
                 .content()                // 텍스트 콘텐츠만 추출
                 .doOnNext(fullResponse::append)  // 각 청크를 fullResponse에 누적
