@@ -39,3 +39,9 @@ spring:
 
 server:
   port: 8081
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:chatbot-jwt-secret-key-must-be-at-least-256-bits-long!!}
+    access-token-expiry: 900000       # 15분 (ms)
+    refresh-token-expiry: 604800000   # 7일 (ms)
