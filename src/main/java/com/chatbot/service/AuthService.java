@@ -52,7 +52,7 @@ public class AuthService {
         }
 
         // 기존 리프레시 토큰 삭제 (단일 세션 유지)
-        refreshTokenRepository.deleteByUsername(user.getUsername());
+        refreshTokenRepository.deleteByUsernameDirectly(user.getUsername());
 
         String accessToken = jwtService.generateAccessToken(user.getUsername(), user.getRole());
         String refreshToken = createRefreshToken(user.getUsername());
@@ -78,13 +78,11 @@ public class AuthService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        // 기존 리프레시 토큰 삭제 후 새로 발급 (Rotation)
-        refreshTokenRepository.delete(stored);
-
+        // 리프레시 토큰은 그대로 유지, 액세스 토큰만 새로 발급
+        // (Rotation 제거 — 멀티 탭 동시 요청 시 race condition 방지)
         String newAccessToken = jwtService.generateAccessToken(username, user.getRole());
-        String newRefreshToken = createRefreshToken(username);
 
-        return new TokenResponse(newAccessToken, newRefreshToken);
+        return new TokenResponse(newAccessToken, refreshToken);
     }
 
     /**
@@ -92,7 +90,7 @@ public class AuthService {
      */
     @Transactional
     public void logout(String refreshToken) {
-        refreshTokenRepository.deleteByToken(refreshToken);
+        refreshTokenRepository.deleteByTokenDirectly(refreshToken);
     }
 
     private String createRefreshToken(String username) {

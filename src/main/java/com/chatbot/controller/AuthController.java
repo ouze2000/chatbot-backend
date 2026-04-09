@@ -38,16 +38,14 @@ public class AuthController {
         ));
     }
 
-    /** 액세스 토큰 재발급 — 리프레시 토큰은 쿠키에서 읽음, 새 쿠키로 교체 */
+    /** 액세스 토큰 재발급 — 리프레시 토큰은 쿠키에서 읽음 (토큰 자체는 교체하지 않음) */
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, String>> refresh(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
-            HttpServletResponse response) {
+            @CookieValue(name = "refreshToken", required = false) String refreshToken) {
         if (refreshToken == null) {
             return ResponseEntity.status(401).body(Map.of("message", "리프레시 토큰이 없습니다."));
         }
         var tokens = authService.refresh(refreshToken);
-        setRefreshCookie(response, tokens.refreshToken());
         return ResponseEntity.ok(Map.of(
                 "accessToken", tokens.accessToken(),
                 "tokenType", tokens.tokenType()
