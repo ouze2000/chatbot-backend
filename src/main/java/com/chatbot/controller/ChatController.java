@@ -2,6 +2,7 @@ package com.chatbot.controller;
 
 import com.chatbot.dto.ChatRequest;
 import com.chatbot.service.ChatService;
+import com.chatbot.tool.NavigationHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -19,15 +20,18 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ObjectMapper objectMapper;
+    private final NavigationHolder navigationHolder;
 
     /**
-     * 생성자: ChatService와 ObjectMapper 주입
+     * 생성자: ChatService, ObjectMapper, NavigationHolder 주입
      * @param chatService 채팅 서비스
      * @param objectMapper JSON 직렬화/역직렬화용
+     * @param navigationHolder AI가 요청한 페이지 이동 경로 보관소
      */
-    public ChatController(ChatService chatService, ObjectMapper objectMapper) {
+    public ChatController(ChatService chatService, ObjectMapper objectMapper, NavigationHolder navigationHolder) {
         this.chatService = chatService;
         this.objectMapper = objectMapper;
+        this.navigationHolder = navigationHolder;
     }
 
     /**
@@ -78,7 +82,17 @@ public class ChatController {
                     }
                 },
                 emitter::completeWithError,  // onError: 에러 발생 시
-                emitter::complete             // onComplete: 스트림 완료 시
+                () -> {                       // onComplete: 스트림 완료 시
+                    try {
+                        // NavigateTool이 경로를 등록했으면 navigate 이벤트 전송
+                        String navPath = navigationHolder.getAndClear(request.getSessionId());
+                        if (navPath != null) {
+                            emitter.send(objectMapper.writeValueAsString(Map.of("navigate", navPath)));
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    emitter.complete();
+                }
         );
 
         return emitter;

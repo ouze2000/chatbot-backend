@@ -4,6 +4,7 @@ import com.chatbot.entity.Conversation;
 import com.chatbot.repository.ConversationRepository;
 import com.chatbot.tool.CalculatorTool;
 import com.chatbot.tool.DateTimeTool;
+import com.chatbot.tool.NavigateTool;
 import com.chatbot.tool.NewsTool;
 import com.chatbot.tool.WeatherTool;
 import com.chatbot.tool.WebCrawlTool;
@@ -34,8 +35,12 @@ import java.util.stream.Collectors;
 public class ChatService {
 
     // RAG 시스템 프롬프트: 컨텍스트를 우선 사용하도록 지시
+    // %s 순서: 1) sessionId, 2) context
     private static final String SYSTEM_PROMPT = """
             You are a helpful assistant. Answer in the same language as the user's message.
+
+            Current session ID: %s
+            (Use this session ID when calling the navigate tool.)
 
             If the following context is provided, use it as the primary source to answer the question.
             If the context is not relevant to the question, answer based on your general knowledge.
@@ -52,6 +57,7 @@ public class ChatService {
     private final CalculatorTool calculatorTool;
     private final WebCrawlTool webCrawlTool;
     private final NewsTool newsTool;
+    private final NavigateTool navigateTool;
 
     /**
      * 소스 파일 정보 레코드
@@ -83,7 +89,8 @@ public class ChatService {
                        DateTimeTool dateTimeTool,
                        CalculatorTool calculatorTool,
                        WebCrawlTool webCrawlTool,
-                       NewsTool newsTool) {
+                       NewsTool newsTool,
+                       NavigateTool navigateTool) {
         this.chatClient = ChatClient.builder(anthropicChatModel).build();
         this.conversationRepository = conversationRepository;
         this.vectorStore = vectorStore;
@@ -92,6 +99,7 @@ public class ChatService {
         this.calculatorTool = calculatorTool;
         this.webCrawlTool = webCrawlTool;
         this.newsTool = newsTool;
+        this.navigateTool = navigateTool;
     }
 
     /**
@@ -146,8 +154,8 @@ public class ChatService {
                 .map(Document::getText)
                 .collect(Collectors.joining("\n\n"));
 
-        // 4. 시스템 프롬프트에 컨텍스트 삽입 (컨텍스트가 없으면 "없음")
-        String systemPrompt = String.format(SYSTEM_PROMPT, context.isBlank() ? "없음" : context);
+        // 4. 시스템 프롬프트에 세션 ID + 컨텍스트 삽입 (컨텍스트가 없으면 "없음")
+        String systemPrompt = String.format(SYSTEM_PROMPT, sessionId, context.isBlank() ? "없음" : context);
 
         // 5. DB에서 기존 대화 이력 조회 및 Spring AI Message 타입으로 변환
         List<Message> history = conversationRepository
@@ -168,7 +176,7 @@ public class ChatService {
         Flux<String> stream = chatClient.prompt()
                 .system(systemPrompt)    // RAG 컨텍스트가 포함된 시스템 프롬프트
                 .messages(history)        // 대화 이력 전달
-                .tools(weatherTool, dateTimeTool, calculatorTool, webCrawlTool, newsTool)  // 도구 등록 (AI가 필요 시 자동 호출)
+                .tools(weatherTool, dateTimeTool, calculatorTool, webCrawlTool, newsTool, navigateTool)  // 도구 등록 (AI가 필요 시 자동 호출)
                 .stream()                 // 스트리밍 모드
                 .content()                // 텍스트 콘텐츠만 추출
                 .doOnNext(fullResponse::append)  // 각 청크를 fullResponse에 누적
