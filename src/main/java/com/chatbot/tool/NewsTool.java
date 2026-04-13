@@ -33,6 +33,15 @@ public class NewsTool {
     @Value("${app.newsdata.api-key}")
     private String apiKey;
 
+    @jakarta.annotation.PostConstruct
+    void init() {
+        if (apiKey == null || apiKey.isBlank()) {
+            log.warn("NewsTool: app.newsdata.api-key 가 설정되지 않았습니다.");
+        } else {
+            log.info("NewsTool: API key 로드됨 (앞 4자리: {}****)", apiKey.substring(0, Math.min(4, apiKey.length())));
+        }
+    }
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -80,8 +89,8 @@ public class NewsTool {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
-                log.warn("NewsData.io API 오류: status={}", response.statusCode());
-                return "뉴스를 가져오는 중 오류가 발생했습니다. (HTTP " + response.statusCode() + ")";
+                log.warn("NewsData.io API 오류: status={}, body={}", response.statusCode(), response.body());
+                return "뉴스 API 오류 (HTTP " + response.statusCode() + "): " + response.body();
             }
 
             // 3. JSON 파싱
