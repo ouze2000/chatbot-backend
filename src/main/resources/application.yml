@@ -45,5 +45,7 @@ app:
     secret: ${JWT_SECRET:chatbot-jwt-secret-key-must-be-at-least-256-bits-long!!}
     access-token-expiry: 900000       # 15분 (ms)
     refresh-token-expiry: 604800000   # 7일 (ms)
+    cookie-secure: ${COOKIE_SECURE:false}      # 운영(HTTPS) 환경에서는 true
+    cookie-same-site: ${COOKIE_SAME_SITE:Lax}  # 프론트/백 도메인 다르면 None (cookie-secure=true 필요)
   newsdata:
     api-key: ${NEWSDATA_API_KEY:}

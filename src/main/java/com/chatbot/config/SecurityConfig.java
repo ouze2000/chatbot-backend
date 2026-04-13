@@ -19,6 +19,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
 
+    // 토큰 인증이 필요하지 않은 URL 목록
+    private static final String[] WHITE_LIST = {
+            "/api/auth/**",       // 로그인 / 토큰 갱신
+    };
+
+    // JWT 인증 필터
     private final JwtAuthFilter jwtAuthFilter;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
@@ -33,7 +39,7 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()  // SSE 비동기 디스패치 허용
-                .requestMatchers("/api/auth/**").permitAll()       // 로그인/리프레시는 인증 없이 허용
+                .requestMatchers(WHITE_LIST).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()  // CORS preflight
                 .anyRequest().authenticated()                       // 나머지는 인증 필요
             )
