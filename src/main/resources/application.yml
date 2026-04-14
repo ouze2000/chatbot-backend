@@ -49,3 +49,5 @@ app:
     cookie-same-site: ${COOKIE_SAME_SITE:Lax}  # 프론트/백 도메인 다르면 None (cookie-secure=true 필요)
   newsdata:
     api-key: ${NEWSDATA_API_KEY:}
+  deepseek:
+    api-key: ${DEEPSEEK_API_KEY}
