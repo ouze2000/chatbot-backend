@@ -16,5 +16,41 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chatbot-backend
+    ports:
+      - "8081:8081"
+    environment:
+      # DB: localhost 대신 컨테이너명으로 접속
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/chatbot
+      # API 키: 호스트 환경변수 또는 .env 파일에서 주입
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      NEWSDATA_API_KEY: ${NEWSDATA_API_KEY:-}
+      WEATHER_API_KEY: ${WEATHER_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-chatbot-jwt-secret-key-must-be-at-least-256-bits-long!!}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-Lax}
+    volumes:
+      - uploads_data:/app/uploads  # 업로드 파일 영구 저장
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ../chatbot-frontend
+      dockerfile: Dockerfile
+    container_name: chatbot-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
+  uploads_data:

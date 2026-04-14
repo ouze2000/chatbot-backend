@@ -50,4 +50,5 @@ app:
   newsdata:
     api-key: ${NEWSDATA_API_KEY:}
   deepseek:
-    api-key: ${DEEPSEEK_API_KEY}
+    api-key: ${DEEPSEEK_API_KEY:-}
+  weather-api-key: ${WEATHER_API_KEY:}
