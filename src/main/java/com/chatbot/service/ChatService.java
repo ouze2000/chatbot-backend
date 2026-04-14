@@ -8,7 +8,6 @@ import com.chatbot.tool.NavigateTool;
 import com.chatbot.tool.NewsTool;
 import com.chatbot.tool.WeatherTool;
 import com.chatbot.tool.WebCrawlTool;
-import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -75,14 +74,16 @@ public class ChatService {
 
     /**
      * 생성자: ChatClient, Repository, VectorStore, Tools 주입
-     * @param anthropicChatModel Anthropic Claude 모델
+     * chatClient는 ChatConfig에서 생성된 DeepSeek 빈을 주입받습니다.
+     * 모델 변경 시 ChatConfig.java만 수정하면 됩니다.
+     * @param chatClient DeepSeek ChatClient (ChatConfig에서 주입)
      * @param conversationRepository 대화 내역 저장소
      * @param vectorStore 벡터 임베딩 저장소 (RAG용)
      * @param weatherTool 날씨 조회 도구 (AI가 필요 시 자동 호출)
      * @param dateTimeTool 날짜/시간 조회 도구 (AI가 필요 시 자동 호출)
      * @param calculatorTool 계산기 도구 (AI가 필요 시 자동 호출)
      */
-    public ChatService(AnthropicChatModel anthropicChatModel,
+    public ChatService(ChatClient chatClient,
                        ConversationRepository conversationRepository,
                        VectorStore vectorStore,
                        WeatherTool weatherTool,
@@ -91,7 +92,7 @@ public class ChatService {
                        WebCrawlTool webCrawlTool,
                        NewsTool newsTool,
                        NavigateTool navigateTool) {
-        this.chatClient = ChatClient.builder(anthropicChatModel).build();
+        this.chatClient = chatClient;
         this.conversationRepository = conversationRepository;
         this.vectorStore = vectorStore;
         this.weatherTool = weatherTool;
