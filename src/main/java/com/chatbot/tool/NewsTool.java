@@ -60,10 +60,17 @@ public class NewsTool {
      * 3. 기사별 제목/설명/출처/날짜 추출
      * 4. 포맷된 문자열로 반환
      */
-    @Tool(description = "최신 뉴스를 검색합니다. 특정 키워드나 주제에 대한 최신 뉴스 기사를 가져올 때 사용합니다.")
+    @Tool(description = """
+            최신 뉴스를 검색합니다. 특정 키워드나 주제에 대한 최신 뉴스 기사를 가져올 때 사용합니다.
+            query: 검색할 키워드 (필수, 예: "AI", "경제", "스포츠"). 반드시 관련 키워드를 지정하세요.
+            language: 언어 코드 (선택, 예: "ko"=한국어, "en"=영어). 생략 가능.
+            """)
     public String searchNews(String query, String language) {
         if (apiKey == null || apiKey.isBlank()) {
             return "NewsData.io API 키가 설정되지 않았습니다. NEWSDATA_API_KEY 환경변수를 확인하세요.";
+        }
+        if (query == null || query.isBlank()) {
+            return "검색 키워드를 입력해주세요.";
         }
 
         try {
