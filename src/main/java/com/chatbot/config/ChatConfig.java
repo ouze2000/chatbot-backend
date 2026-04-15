@@ -23,28 +23,39 @@ import org.springframework.context.annotation.Configuration;
 public class ChatConfig {
 
     @Value("${app.deepseek.api-key}")
-    private String deepSeekApiKey;
+    private String apiKey;
+
+    @Value("${app.deepseek.base-url}")
+    private String baseUrl;
+
+    @Value("${app.deepseek.model}")
+    private String model;
+
+    @Value("${app.deepseek.max-tokens}")
+    private int maxTokens;
 
     /**
-     * DeepSeek ChatClient 빈
-     * DeepSeek는 OpenAI-compatible API를 제공하므로 Spring AI OpenAI 클라이언트를
-     * base-url만 교체하여 그대로 사용할 수 있습니다.
+     * ChatClient 빈 (OpenAI-compatible API)
+     * base-url을 변경하면 DeepSeek, Ollama 등 다른 OpenAI-compatible 엔드포인트로 전환 가능.
+     * app.deepseek.base-url / app.deepseek.api-key 설정 필요.
      */
     @Bean
     public ChatClient chatClient() {
-        OpenAiApi deepSeekApi = OpenAiApi.builder()
-                .baseUrl("https://api.deepseek.com")
-                .apiKey(deepSeekApiKey)
+        // OpenAI-compatible API 클라이언트 (base-url 교체로 다른 엔드포인트 사용 가능)
+        OpenAiApi openAiApi = OpenAiApi.builder()
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
                 .build();
 
-        OpenAiChatModel deepSeekModel = OpenAiChatModel.builder()
-                .openAiApi(deepSeekApi)
+        // 모델명 및 최대 토큰 수는 application.yml에서 관리
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()
-                        .model("deepseek-chat")
-                        .maxTokens(4096)
+                        .model(model)
+                        .maxTokens(maxTokens)
                         .build())
                 .build();
 
-        return ChatClient.builder(deepSeekModel).build();
+        return ChatClient.builder(chatModel).build();
     }
 }
